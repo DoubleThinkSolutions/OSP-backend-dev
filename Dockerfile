@@ -4,13 +4,15 @@ FROM ubuntu:25.10
 # Set non-interactive frontend
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN apt-get update && apt-get install -y software-properties-common \
+    && add-apt-repository universe
+
 # Install system dependencies
-RUN apt update && apt install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     meson \
     ninja-build \
     libssl-dev \
-    libcheck-dev \
     pkg-config \
     python3 \
     python3-pip \
@@ -21,7 +23,9 @@ RUN apt update && apt install -y \
     gstreamer1.0-plugins-ugly \
     git \
     openssl \
-    curl
+    curl \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
 
 # Clone and build signed-video-framework
 WORKDIR /opt
@@ -41,7 +45,7 @@ RUN git clone https://github.com/AxisCommunications/signed-video-framework-examp
 # Set up signing keys
 RUN mkdir -p /etc/video-signing && \
     chmod 700 /etc/video-signing && \
-    openssl genpkey -algorithm RSA -out /etc/video-signing/private.pem -pkcs8 -aes256 -pass pass:dummy && \
+    openssl genpkey -algorithm RSA -out /etc/video-signing/private.pem -pass pass:dummy -pkeyopt rsa_keygen_bits:2048 && \
     openssl rsa -pubout -in /etc/video-signing/private.pem -out /etc/video-signing/public.pem -passin pass:dummy && \
     chmod 600 /etc/video-signing/private.pem && \
     chmod 644 /etc/video-signing/public.pem
@@ -54,7 +58,14 @@ COPY . /app
 WORKDIR /app
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Set up venv
+RUN python3 -m venv /venv && \
+    /venv/bin/pip install --upgrade pip && \
+    /venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# Optionally, add to PATH
+ENV PATH="/venv/bin:$PATH"
+
 
 # Add .env with dummy values (you should mount a real one in production)
 RUN echo "\
