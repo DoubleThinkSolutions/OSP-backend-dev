@@ -1,11 +1,8 @@
 # Use an official Python image with build tools
-FROM ubuntu:25.10
+FROM python:3.12-slim
 
 # Set non-interactive frontend
 ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y software-properties-common \
-    && add-apt-repository universe
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
