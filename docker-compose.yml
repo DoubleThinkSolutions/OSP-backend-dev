@@ -1,0 +1,29 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  video-signing-backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount for persistent database
+      - ./data/database:/app/database
+      # Mount for signed videos (optional - for persistence)
+      - ./data/signed-videos:/tmp/video-signing
+      # Mount for logs
+      - ./data/logs:/app/logs
+    environment:
+      # Override default settings
+      - DATABASE_URL=sqlite:////app/database/signed_videos.db
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

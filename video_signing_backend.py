@@ -22,8 +22,10 @@ import uvicorn
 
 # Database imports (using SQLAlchemy as example)
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, LargeBinary, Boolean
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +42,9 @@ class SigningConfig:
     
     # Private key for signing (in production, use secure key management)
     private_key_path: str = "/etc/video-signing/private.pem"
+    
+    # Private key password (for development - use secure key management in production)
+    private_key_password: str = os.getenv("PRIVATE_KEY_PASSWORD", "")
     
     # Temporary directory for processing
     temp_dir: str = "/tmp/video-signing"
@@ -92,14 +97,35 @@ class VideoSigningService:
         
     def validate_dependencies(self):
         """Validate that required dependencies are available"""
+        missing_deps = []
+        
         if not os.path.exists(self.config.signed_video_lib_path):
-            logger.warning(f"Signed video library not found at {self.config.signed_video_lib_path}")
+            missing_deps.append(f"Signed video library: {self.config.signed_video_lib_path}")
             
         if not os.path.exists(self.config.signer_executable):
-            logger.warning(f"Signer executable not found at {self.config.signer_executable}")
+            missing_deps.append(f"Signer executable: {self.config.signer_executable}")
             
         if not os.path.exists(self.config.private_key_path):
-            logger.warning(f"Private key not found at {self.config.private_key_path}")
+            missing_deps.append(f"Private key: {self.config.private_key_path}")
+        
+        if missing_deps:
+            logger.error("Missing dependencies:")
+            for dep in missing_deps:
+                logger.error(f"  - {dep}")
+            logger.error("Please ensure Axis Signed Video Framework is properly installed")
+        else:
+            logger.info("All dependencies found successfully")
+            
+        # Test signer executable
+        try:
+            result = subprocess.run([self.config.signer_executable, "--help"], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logger.info("Signer executable is working correctly")
+            else:
+                logger.warning(f"Signer executable returned code {result.returncode}")
+        except Exception as e:
+            logger.error(f"Failed to test signer executable: {e}")
     
     def calculate_file_hash(self, file_path: str) -> str:
         """Calculate SHA-256 hash of file"""
@@ -131,18 +157,29 @@ class VideoSigningService:
                 self.config.signer_executable,
                 "--input", input_path,
                 "--output", output_path,
-                "--key", self.config.private_key_path,
-                "--verbose"
+                "--key", self.config.private_key_path
             ]
             
-            logger.info(f"Executing signing command: {' '.join(cmd)}")
+            # Add password if provided
+            if self.config.private_key_password:
+                cmd.extend(["--key-password", self.config.private_key_password])
+            
+            # Add verbose flag for debugging
+            cmd.append("--verbose")
+            
+            logger.info(f"Executing signing command: {' '.join(cmd[:-2])}... [password hidden]")
+            
+            # Set environment variables for GStreamer
+            env = os.environ.copy()
+            env['GST_PLUGIN_PATH'] = '/usr/lib/x86_64-linux-gnu/gstreamer-1.0:/usr/local/lib/gstreamer-1.0'
             
             # Execute signing process
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=300,  # 5 minute timeout
+                env=env
             )
             
             if result.returncode == 0:
