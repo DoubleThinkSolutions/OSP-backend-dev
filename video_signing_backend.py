@@ -35,19 +35,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SigningConfig:
     # Path to the signed video framework library
-    signed_video_lib_path: str = "/usr/local/lib/libsigned-video-framework.so"
+    signed_video_lib_path: str = os.getenv("SIGNED_VIDEO_LIB_PATH", "/usr/local/lib/libsigned-video-framework.so")
     
     # Path to signing executable (from examples)
-    signer_executable: str = "/usr/local/bin/signer"
+    signer_executable: str = os.getenv("SIGNER_EXECUTABLE", "/usr/local/bin/signer")
     
     # Private key for signing (in production, use secure key management)
-    private_key_path: str = "/etc/video-signing/private.pem"
+    private_key_path: str = os.getenv("PRIVATE_KEY_PATH", "/etc/video-signing/private.pem")
     
     # Private key password (for development - use secure key management in production)
     private_key_password: str = os.getenv("PRIVATE_KEY_PASSWORD", "")
     
     # Temporary directory for processing
-    temp_dir: str = "/tmp/video-signing"
+    temp_dir: str = os.getenv("TEMP_DIR", "/tmp/video-signing")
     
     # Supported video formats
     supported_formats: list = None
